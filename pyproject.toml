@@ -12,11 +12,11 @@ description = "Koopman Model Control package"
 requires-python = ">=3.10"
 dependencies = [
     "numpy==1.26.4",
-    "pytorch-lightning==2.6.1",
     "torch==2.10.0",
     "torchmetrics==1.8.2",
     "torchvision==0.25.0",
     "mlflow==3.9.0",
+    "lightning==2.6.1",
     "scikit-learn==1.7.2"
 ]
 
