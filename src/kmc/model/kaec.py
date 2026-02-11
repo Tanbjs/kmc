@@ -60,19 +60,12 @@ class KAEc(nn.Module):
                  latent_dim: int, 
                  decoder_mode: str,
                  hidden_enc_cfg: Dict[str, Any],
-                 hidden_dec_cfg: Dict[str, Any], 
-                 target_indices: Optional[Any] = None):
+                 hidden_dec_cfg: Dict[str, Any]
+                 ):
 
         super(KAEc, self).__init__()
 
         # 1. Output Dimension
-        if target_indices is not None:
-            self.target_indices = target_indices
-            self.output_dim = len(target_indices) 
-        else:
-            self.target_indices = None
-            self.output_dim = feature_dim
-        
         self.decoder_mode = decoder_mode
         
         # 2. Encoder
@@ -80,7 +73,7 @@ class KAEc(nn.Module):
 
         # 3. System Matrices (A, B)
         # Total Latent Dim = Output Dim (y) + Encoder Dim (phi)
-        self.total_latent_dim = self.output_dim + latent_dim
+        self.total_latent_dim = feature_dim + latent_dim
         self.A = nn.Linear(self.total_latent_dim, self.total_latent_dim, bias=False)
         self.B = nn.Linear(control_dim, self.total_latent_dim, bias=False)
 
@@ -91,23 +84,19 @@ class KAEc(nn.Module):
 
         # 4. Decoder
         if self.decoder_mode == 'linear':
-            self.decoder = nn.Linear(self.total_latent_dim, self.output_dim, bias=False)
+            self.decoder = nn.Linear(self.total_latent_dim, feature_dim, bias=False)
             with torch.no_grad():
                 self.decoder.weight.zero_() 
-                self.decoder.weight[:, :self.output_dim] = torch.eye(self.output_dim)
+                self.decoder.weight[:, :feature_dim] = torch.eye(feature_dim)
             self.decoder.weight.requires_grad = False
             
         elif self.decoder_mode == 'nonlinear':
-            self.decoder = Decoder(self.total_latent_dim, self.output_dim, hidden_dec_cfg)
+            self.decoder = Decoder(self.total_latent_dim, feature_dim, hidden_dec_cfg)
         else:
             raise ValueError(f"Unknown decoder_mode: {decoder_mode}")
 
     def lift(self, x):
-        if self.target_indices is not None:
-            y = x[:, self.target_indices]
-        else:
-            y = x
-        return torch.cat((y, self.encoder(x)), dim=-1)
+        return torch.cat((x, self.encoder(x)), dim=-1)
 
     def forward(self, x_curr, u_curr):
         z = self.lift(x_curr)                   # 1. Lift
@@ -117,134 +106,122 @@ class KAEc(nn.Module):
 
 class LitKAEc(L.LightningModule):
     def __init__(self, 
-                 input_dim: int,
-                 control_dim: int,       
-                 latent_dim: int,
-                 decoder_mode: str,
-                 hidden_enc_cfg: Dict,
-                 hidden_dec_cfg: Dict,
-                 target_indices: Optional[Any] = None,
-                 learning_rate: float = 1e-3,
-                 w_rec: float = 1.0,
-                 w_pred: float = 1.0,    
-                 w_lin: float = 1.0,
-                 w_enc_reg: float = 1.0,
-                 w_dec_reg: float = 1.0):    
-
+                 model_config: Dict[str, Any],
+                 optimizer_config: Dict[str, Any],
+                 scheduler_config: Optional[Dict[str, Any]],
+                 loss_weights: Dict[str, float]):
+        """
+        Args:
+            model_config: Dict params passed directly to KAEc (feature_dim, latent_dim, etc.)
+            optimizer_config: Dict containing 'type' and 'params' (lr, weight_decay, etc.)
+            loss_weights: Dict containing weights (w_rec, w_lin, w_pred, w_enc, w_dec)
+        """
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters() # Saves all dicts to self.hparams
 
-        self.model = KAEc(
-            feature_dim=input_dim,
-            control_dim=control_dim,
-            latent_dim=latent_dim,
-            decoder_mode=decoder_mode,
-            hidden_enc_cfg=hidden_enc_cfg,
-            hidden_dec_cfg=hidden_dec_cfg,
-            target_indices=target_indices
-        )
+        # 1. Initialize Model (Unpacking Config)
+        # Ensure KAEc class accepts **kwargs or matches these keys
+        self.model = KAEc(**self.hparams.model_config) 
 
     def forward(self, x_curr, u_curr):
         return self.model(x_curr, u_curr)
+
+    def configure_optimizers(self):
+        opt_cfg = self.hparams.optimizer_config
+        opt_type = opt_cfg.get('type', 'adam').lower()
+        opt_params = opt_cfg.get('params', {'lr': 1e-3})
+        scheduler_type = self.hparams.scheduler_config.get('type') if self.hparams.scheduler_config else None
+        scheduler_params = self.hparams.scheduler_config.get('params', {}) if self.hparams.scheduler_config else {}
+
+        if opt_type == 'adam':
+            optimizer = optim.Adam(self.parameters(), **opt_params)
+        elif opt_type == 'lbfgs':
+            optimizer = optim.LBFGS(self.parameters(), **opt_params)
+        else:
+            raise ValueError(f"Unknown optimizer type: {opt_type}")
+
+        if scheduler_type.lower() == 'reducelronplateau':
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, **scheduler_params)
+        else:
+            scheduler = optim.lr_scheduler.StepLR(optimizer, **scheduler_params)
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "valid/total_loss",
+                "strict": False,
+            }
+        }
 
     def training_step(self, batch, batch_idx):
         return self._shared_eval_step(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
-        self._shared_eval_step(batch, batch_idx, "valid")
-
-    def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=10
-        )
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "monitor": "valid/total_loss"
-            }
-        }
+        return self._shared_eval_step(batch, batch_idx, "valid")
 
     def _shared_eval_step(self, batch, batch_idx, prefix):
-        # Batch assumed format: (x_k, u_k, x_k+1)
-        x_curr, u_curr, x_next = batch        
         
-        # 1. Forward Pass
-        x_next_pred, z_next_pred = self.model(x_curr, u_curr)
+        # Batch from AUVLazyDataset: (Batch, Seq_Len, Dim)
+        weights = self.hparams.loss_weights
+        x_curr_seq, u_curr_seq, x_next_true_seq = batch        
+        
+        x_start = x_curr_seq[:, 0, :].unsqueeze(1)                         
+        x_multi_pred, z_multi_pred = self._multi_step_pred(x_start, u_curr_seq)
 
-        # Filter target indices for Ground Truth comparison
-        if self.model.target_indices is not None:
-            x_next_target = x_next[:, self.model.target_indices]
-        else:
-            x_next_target = x_next
+        # LOSS 1: Reconstruction (Physical Space)
+        z_next_pred = self.model.lift(x_next_true_seq)
+        x_next_pred = self.model.decoder(z_next_pred)
+        loss_recon = F.mse_loss(x_next_pred, x_next_true_seq)
 
-        # --- LOSS 1: Reconstruction Loss ---
-        loss_recon = F.mse_loss(x_next_pred, x_next_target)
+        # LOSS 2: Linear Evolution Consistency (Latent Space)
+        loss_lin = F.mse_loss(z_multi_pred, z_next_pred)
 
-        # --- LOSS 2: Linear Evolution Loss ---
-        with torch.no_grad():       
-            z_next_real = self.model.lift(x_next)
-        loss_lin = F.mse_loss(z_next_pred, z_next_real)
+        # LOSS 3: Prediction (Long-term stability)
+        loss_pred = F.mse_loss(x_multi_pred, x_next_true_seq)
 
-        # --- LOSS 3: Prediction Loss (Multi-step) ---
-        # Note: Using small p=1 step here based on batch format, 
-        if u_curr.ndim == 2: # (Batch, Dim) -> (Batch, 1, Dim)
-            u_in = u_curr.unsqueeze(1)
-            x_in = x_curr.unsqueeze(1)
-        else:
-            u_in = u_curr
-            x_in = x_curr
+        # LOSS 4: Infinity Norm (Physical Space)
+        L_inf_rec = torch.mean(torch.norm(x_next_pred - x_next_true_seq, p=float('inf'), dim=-1))
+        L_inf_pred = torch.mean(torch.norm(x_multi_pred - x_next_true_seq, p=float('inf'), dim=-1))
+        L_inf = L_inf_rec + L_inf_pred
 
-        x_multi_pred = self._multi_step_pred(x_in, u_in)
-
-        loss_pred = F.mse_loss(x_multi_pred[:, -1, :], x_next_target)
-
-        # --- LOSS 4 & 5: L2 Regularization (Sum of Squares) ---
+        # --- 3. Regularization ---
         loss_enc_reg = sum(p.pow(2).sum() for n, p in self.model.encoder.named_parameters() if 'weight' in n)
+        loss_dec_reg = 0.0
         if self.model.decoder_mode == 'nonlinear':
             loss_dec_reg = sum(p.pow(2).sum() for n, p in self.model.decoder.named_parameters() if 'weight' in n)
-        elif self.model.decoder_mode == 'linear':
-            loss_dec_reg = 0.0
 
-        # Total Weighted Loss        
-        total_loss = (self.hparams.w_rec * loss_recon) + \
-                     (self.hparams.w_lin * loss_lin) + \
-                     (self.hparams.w_pred * loss_pred) + \
-                     (self.hparams.w_enc_reg * loss_enc_reg) + \
-                     (self.hparams.w_dec_reg * loss_dec_reg)
+        # --- Total Weighted Loss ---
+        total_loss = (weights.get('w_rec', 1.0) * loss_recon) + \
+                     (weights.get('w_lin', 1.0) * loss_lin) + \
+                     (weights.get('w_pred', 1.0) * loss_pred) + \
+                     (weights.get('w_inf', 0.0) * L_inf) + \
+                     (weights.get('w_enc_reg', 0.0) * loss_enc_reg) + \
+                     (weights.get('w_dec_reg', 0.0) * loss_dec_reg)
 
         # Logging
-        self.log(f'{prefix}/total_loss', total_loss, prog_bar=True)
-        self.log(f'{prefix}/recon_loss', loss_recon)
-        self.log(f'{prefix}/lin_loss', loss_lin)
-        self.log(f'{prefix}/pred_loss', loss_pred)
-        self.log(f'{prefix}/enc_reg_loss', loss_enc_reg)
-        self.log(f'{prefix}/dec_reg_loss', loss_dec_reg)
+        self.log(f'{prefix}/total_loss', total_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f'{prefix}/recon_loss', loss_recon, on_step=False, on_epoch=True)
+        self.log(f'{prefix}/pred_loss', loss_pred, on_step=False, on_epoch=True)
+        self.log(f'{prefix}/lin_loss', loss_lin, on_step=False, on_epoch=True)
+        self.log(f'{prefix}/inf_norm_loss', L_inf, on_step=False, on_epoch=True)
         return total_loss
     
-    def _multi_step_pred(self, X: torch.Tensor, U: torch.Tensor):
+    def _multi_step_pred(self, x_init: torch.Tensor, U: torch.Tensor):
         """
-        Helper for multi-step prediction returning PHYSICAL state (x).
-        X: (Batch, 1, Dim)
-        U: (Batch, Steps, Dim)
+        x_init: (Batch, 1, Dim) - State at t=0
+        U:      (Batch, Steps, Dim) - Control sequence
+        Returns: (Batch, Steps, Dim) - Predicted sequence
         """
         steps = U.shape[1]
-        x_curr = X[:, 0, :] # Initial State
-        
-        # 1. Lift to z
-        z = self.model.lift(x_curr)
-        
+        z = self.model.lift(x_init)                         # (B, 1, Latent)
         x_pred_stack = []
-        
+        z_pred_stack = []
         for i in range(steps):
-            # 2. Evolve z
-            # z_next = z @ A.T + u @ B.T
-            u_step = U[:, i, :]
-            z = self.model.A(z) + self.model.B(u_step)
-            
-            # 3. Decode back to x (for loss comparison)
+            u_step = U[:, i, :].unsqueeze(1)                # (B, 1, Dim)
+            z = self.model.A(z) + self.model.B(u_step)      # Linear Dynamics: z_{k+1} = z_k A^T + u_k B^T
             x_step = self.model.decoder(z)
+            z_pred_stack.append(z)
             x_pred_stack.append(x_step)
-            
-        return torch.stack(x_pred_stack, dim=1)
+
+        return torch.cat(x_pred_stack, dim=1), torch.cat(z_pred_stack, dim=1)
