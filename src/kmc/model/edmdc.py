@@ -13,12 +13,11 @@ class EDMDc(BaseEstimator):
     
     Dynamics:
         z_{k+1} = A * z_k + B * u_k
-        x_{k}   = C * z_k  (where C = [I 0])
     """
 
     def __init__(self, 
-                 obs: list[BaseObservable], 
-                 method: str = 'ridge', 
+                 obs: BaseObservable, 
+                 method: str = 'ols', 
                  alpha: float = 1e-5):
         super().__init__() 
         self._obs_func = obs
@@ -28,7 +27,7 @@ class EDMDc(BaseEstimator):
         # Learned System Matrices
         self.A = None  # Latent state transition (n_lifted, n_lifted)
         self.B = None  # Latent control matrix (n_lifted, n_controls)
-        self.C = None  # Projection matrix z -> x (n_physical, n_lifted)
+        self.Omega = None  # Observable function and input matrix (n_lifted + n_controls)
 
     def fit(self, X1: np.ndarray, X2: np.ndarray, U: np.ndarray) -> 'EDMDc':
         """
@@ -39,31 +38,17 @@ class EDMDc(BaseEstimator):
         U_current = np.asarray(U)
 
         # 1. Fit & Transform Observable (Lifting)
-        for obs in self._obs_func:
-            obs.fit(X_current)
-        Z_current = np.hstack([obs.transform(X_current) for obs in self._obs_func])
-        Z_next = np.hstack([obs.transform(X_next) for obs in self._obs_func])
+        Z_current = self._obs_func.fit_transform(X_current)
+        Z_next = self._obs_func.transform(X_next)
 
-        # --- MODIFIED SECTION START ---
         # 2. Construct C Matrix as [I 0]
         # We assume z = [x, phi(x)], so x is just the first n_physical elements of z.
-        
-        n_physical = X_current.shape[1]
         n_lifted = Z_current.shape[1]
-
-        if n_lifted < n_physical:
-            raise ValueError(f"Lifted dimension ({n_lifted}) is smaller than physical dimension ({n_physical}). Cannot enforce C=[I 0].")
-
-        # Create C = [I  0]
-        self.C = np.zeros((n_physical, n_lifted))
-        self.C[:n_physical, :n_physical] = np.eye(n_physical)
 
         # 3. Formulate EDMDc Linear Problem
         # Minimize || Z_next - (Z_curr * A^T + U_curr * B^T) ||^2
-        
         # Construct Feature Matrix Omega = [Z, U]
-        Omega = np.hstack((Z_current, U_current))
-        Y = Z_next
+        self.Omega = np.hstack((Z_current, U_current))
         
         # --- REGRESSION METHOD SELECTION ---
         if self.method == 'ridge':
@@ -76,7 +61,7 @@ class EDMDc(BaseEstimator):
             raise ValueError(f"Unknown method: {self.method}. Use 'ridge', 'ols', or 'lasso'.")
             
         # 4. Solve for Operator K = [A, B]
-        regressor.fit(Omega, Y)
+        regressor.fit(self.Omega, Z_next)
         
         # Extract A, B from the learned coefficients
         K = regressor.coef_
@@ -92,23 +77,11 @@ class EDMDc(BaseEstimator):
         Predict the next PHYSICAL state x_{k+1}.
         """
         self._check_fitted()
-
-        # 1. Lift
-        Z = np.hstack([obs.transform(X) for obs in self._obs_func])
-        
-        # 2. Evolve in Latent Space
-        # z_{k+1} = A * z_k + B * u_k
+        Z = self._obs_func.fit_transform(X)
         Z_next = Z @ self.A.T + U @ self.B.T
 
-        # 3. Project back using C = [I 0]
-        # This effectively slices the first n_physical components
-        return Z_next @ self.C.T
-    
-    def predict_latent(self, X: np.ndarray, U: np.ndarray) -> np.ndarray:
-        self._check_fitted()
-        Z = np.hstack([obs.transform(X) for obs in self._obs_func])
-        return Z @ self.A.T + U @ self.B.T
+        return Z_next
 
     def _check_fitted(self):
-        if self.A is None or self.B is None or self.C is None:
+        if self.A is None or self.B is None:
             raise NotFittedError(f"{self.__class__.__name__} is not fitted.")

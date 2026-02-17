@@ -62,14 +62,14 @@ def gen_child_name(exp_id: str, parent_name: str, parent_id: str):
     max_idx = 0
     for r in children:
         name = r.info.run_name
-        if name and name.startswith(parent_name + "_"):
+        if name and name.startswith(parent_name + " "):
             try:
-                idx = int(name.split("_")[-1])
+                idx = int(name.split(" ")[-1])
                 max_idx = max(max_idx, idx)
             except ValueError:
                 pass
 
-    child_name = f"{parent_name}_{max_idx + 1}"
+    child_name = f"{parent_name} {max_idx + 1}"
     
     return child_name
 

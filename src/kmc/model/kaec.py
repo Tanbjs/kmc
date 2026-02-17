@@ -164,25 +164,25 @@ class LitKAEc(L.LightningModule):
         
         # Batch from AUVLazyDataset: (Batch, Seq_Len, Dim)
         weights = self.hparams.loss_weights
-        x_curr_seq, u_curr_seq, x_next_true_seq = batch        
+        x_curr, u_curr, x_next_true = batch        
         
-        x_start = x_curr_seq[:, 0, :].unsqueeze(1)                         
-        x_multi_pred, z_multi_pred = self._multi_step_pred(x_start, u_curr_seq)
+        x0 = x_curr[:, 0, :].unsqueeze(1)                         
+        x_multi_pred, z_multi_pred = self._multi_step_pred(x0, u_curr)
 
         # LOSS 1: Reconstruction (Physical Space)
-        z_next_pred = self.model.lift(x_next_true_seq)
+        z_next_pred = self.model.lift(x_next_true)
         x_next_pred = self.model.decoder(z_next_pred)
-        loss_recon = F.mse_loss(x_next_pred, x_next_true_seq)
+        loss_recon = F.mse_loss(x_next_pred, x_next_true)
 
         # LOSS 2: Linear Evolution Consistency (Latent Space)
         loss_lin = F.mse_loss(z_multi_pred, z_next_pred)
 
         # LOSS 3: Prediction (Long-term stability)
-        loss_pred = F.mse_loss(x_multi_pred, x_next_true_seq)
+        loss_pred = F.mse_loss(x_multi_pred, x_next_true)
 
         # LOSS 4: Infinity Norm (Physical Space)
-        L_inf_rec = torch.mean(torch.norm(x_next_pred - x_next_true_seq, p=float('inf'), dim=-1))
-        L_inf_pred = torch.mean(torch.norm(x_multi_pred - x_next_true_seq, p=float('inf'), dim=-1))
+        L_inf_rec = torch.mean(torch.norm(x_next_pred - x_next_true, p=float('inf'), dim=-1))
+        L_inf_pred = torch.mean(torch.norm(x_multi_pred - x_next_true, p=float('inf'), dim=-1))
         L_inf = L_inf_rec + L_inf_pred
 
         # --- 3. Regularization ---
@@ -211,17 +211,27 @@ class LitKAEc(L.LightningModule):
         """
         x_init: (Batch, 1, Dim) - State at t=0
         U:      (Batch, Steps, Dim) - Control sequence
-        Returns: (Batch, Steps, Dim) - Predicted sequence
+        Returns: 
+            x_pred_seq: (Batch, Steps, Dim) - Predicted sequence using Delta strategy
+            z_pred_seq: (Batch, Steps, Dim) - Latent sequence
         """
         steps = U.shape[1]
-        z = self.model.lift(x_init)                         # (B, 1, Latent)
+        z = self.model.lift(x_init)      # (B, 1, Latent)
         x_pred_stack = []
         z_pred_stack = []
+        
         for i in range(steps):
-            u_step = U[:, i, :].unsqueeze(1)                # (B, 1, Dim)
-            z = self.model.A(z) + self.model.B(u_step)      # Linear Dynamics: z_{k+1} = z_k A^T + u_k B^T
-            x_step = self.model.decoder(z)
-            z_pred_stack.append(z)
-            x_pred_stack.append(x_step)
+            u_step = U[:, i, :].unsqueeze(1)  # (B, 1, Input_Dim)
+            # --- Linear Dynamics (Latent Space) ---
+            # z_{k+1} = A z_k + B u_k
+            z_next = self.model.A(z) + self.model.B(u_step) 
+            
+            # Store results
+            x_next = self.model.decoder(z_next)
+            z_pred_stack.append(z_next)
+            x_pred_stack.append(x_next)
+            
+            # Update for next step
+            z = z_next       
 
         return torch.cat(x_pred_stack, dim=1), torch.cat(z_pred_stack, dim=1)
