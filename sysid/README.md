@@ -26,6 +26,47 @@ sysid/
 └── run_local.sh         # Run full pipeline locally
 ```
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph local["Local / Container"]
+        direction TB
+        kmc["kmc library\nDMDc · EDMDc · LitKAEc"]
+        subgraph pipeline["sysid pipeline"]
+            direction TB
+            A["setup.py\nสร้าง MLflow run\nlog config"]
+            B["process.py\nดึง raw data\npreprocess\nupload"]
+            C["train.py\nโหลด data\ntrain model\nlog model"]
+            D["validate.py\nโหลด model\npredict\nlog ผล"]
+            A --> B --> C --> D
+        end
+        kmc --> pipeline
+    end
+
+    subgraph mlflow["MLflow Tracking Server"]
+        runs["Runs / Experiments\nparams · metrics"]
+        registry["Model Registry"]
+        art["Artifacts\nconfig · plots · scores"]
+    end
+
+    subgraph s3["MinIO / S3"]
+        raw["raw/\nCSV จาก AUV"]
+        clean["cleaned/\ntrain · val · test"]
+    end
+
+    A -->|"log config + run_id"| runs
+    B -->|"อ่าน"| raw
+    B -->|"upload"| clean
+    B -->|"log dataset lineage"| runs
+    C -->|"อ่าน"| clean
+    C -->|"log params/metrics"| runs
+    C -->|"register model"| registry
+    D -->|"load model"| registry
+    D -->|"อ่าน test data"| clean
+    D -->|"log figures/scores"| art
+```
+
 ## Prerequisites
 - Python 3.10+
 - `kmc` package installed (`pip install -e .` from repo root)
