@@ -14,14 +14,15 @@ sysid/
 │   ├── kaec/            # Koopman-based model configs
 │   └── physics/         # Physics-informed configs
 ├── notebook/            # ETL prototype notebook
+├── container/           # Container definitions
+│   ├── Dockerfile
+│   └── singularity.def
 ├── script/              # Entry-point scripts
 │   ├── setup.py         # Create MLflow run and log config
 │   ├── process.py       # Fetch and preprocess data
 │   ├── train.py         # Train model
 │   ├── validate.py      # Evaluate and log results
 │   └── utils/           # Shared helpers (data loading, metrics)
-├── Dockerfile
-├── singularity.def
 └── run_local.sh         # Run full pipeline locally
 ```
 
@@ -58,7 +59,7 @@ sysid/
 Build and run with GPU support:
 ```bash
 cd kmc
-docker build -f sysid/Dockerfile -t kmc-sysid .
+docker build -f sysid/container/Dockerfile -t kmc-sysid .
 docker run --gpus all -it --rm -v $(pwd)/sysid:/workspace kmc-sysid
 bash run_local.sh
 ```
