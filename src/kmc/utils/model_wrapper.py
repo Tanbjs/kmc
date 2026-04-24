@@ -6,6 +6,7 @@ import torch
 
 from ..model import DMDc, EDMDc, LitKAEc
 
+
 class DMDcWrapper(mlflow.pyfunc.PythonModel):
     
     def __init__(self, 
@@ -63,6 +64,7 @@ class DMDcWrapper(mlflow.pyfunc.PythonModel):
         
         return y_next
     
+
 class EDMDcWrapper(mlflow.pyfunc.PythonModel):    
     def __init__(self, 
                  model: EDMDc,
@@ -121,6 +123,7 @@ class EDMDcWrapper(mlflow.pyfunc.PythonModel):
         y_next = self.scaler_y.inverse_transform(y_next_scaled)
         
         return x_next, y_next
+    
     
 class DeepModelWrapper(mlflow.pyfunc.PythonModel):
     
