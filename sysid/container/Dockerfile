@@ -13,4 +13,7 @@ COPY ../pyproject.toml ../README.md ./
 COPY ../src/ ./src/
 RUN pip install -e .
 
+COPY ../sysid/requirements.txt ./sysid/requirements.txt
+RUN pip install -r sysid/requirements.txt
+
 CMD ["bash"]
