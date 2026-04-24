@@ -35,10 +35,10 @@ flowchart LR
         kmc["kmc library\nDMDc · EDMDc · LitKAEc"]
         subgraph pipeline["sysid pipeline"]
             direction TB
-            A["setup.py\nสร้าง MLflow run\nlog config"]
-            B["process.py\nดึง raw data\npreprocess\nupload"]
-            C["train.py\nโหลด data\ntrain model\nlog model"]
-            D["validate.py\nโหลด model\npredict\nlog ผล"]
+            A["setup.py\ncreate MLflow run\nlog config"]
+            B["process.py\nfetch raw data\npreprocess\nupload"]
+            C["train.py\nload data\ntrain model\nlog model"]
+            D["validate.py\nload model\npredict\nlog results"]
             A --> B --> C --> D
         end
         kmc --> pipeline
@@ -51,19 +51,19 @@ flowchart LR
     end
 
     subgraph s3["MinIO / S3"]
-        raw["raw/\nCSV จาก AUV"]
+        raw["raw/\nAUV CSV files"]
         clean["cleaned/\ntrain · val · test"]
     end
 
     A -->|"log config + run_id"| runs
-    B -->|"อ่าน"| raw
+    B -->|"read"| raw
     B -->|"upload"| clean
     B -->|"log dataset lineage"| runs
-    C -->|"อ่าน"| clean
+    C -->|"read"| clean
     C -->|"log params/metrics"| runs
     C -->|"register model"| registry
     D -->|"load model"| registry
-    D -->|"อ่าน test data"| clean
+    D -->|"read test data"| clean
     D -->|"log figures/scores"| art
 ```
 
