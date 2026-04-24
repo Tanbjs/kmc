@@ -1,56 +1,64 @@
-# Data-driven for autonomous underwater vehicle 
+# AUV System Identification Pipeline
 
-## Overview
-The project aims to simulate and compare various data-drive techniques on the autonomous underwater vehicle. Such techniques include:
-- System identification using Koopman operator theory
-    - Dynamic Mode Decomposition wtih control (DMDc)
-    - Extended Dynamic Mode Decomposition with control (EDMDc)
-    - Deep koopman with control (DKC)
-    - Deep koopman with control using physics-informed neural network (DKC-PINN)
+Training and validation pipeline for data-driven system identification of an autonomous underwater vehicle (AUV) using Koopman operator methods from the `kmc` library.
 
-## Repository Structure
-- `data/`: Contains scripts for raw, preprocessed, featured data.
-- `config/`: Configuration files for different models and experiments.
-- `sysid/`: library of various system identification techniques.
-- `notebooks/`: Jupyter notebooks for prototype.
-- `src/`: Main programs.
-- `tools/`: Utility scripts for various tasks.
+## Models
+- DMDc — Dynamic Mode Decomposition with control
+- EDMDc — Extended Dynamic Mode Decomposition with control
+- Deep Koopman with control (DKC / DKC-PINN)
+
+## Structure
+```
+sysid/
+├── config/              # Experiment configs (model, data, features)
+│   ├── kaec/            # Koopman-based model configs
+│   └── physics/         # Physics-informed configs
+├── notebook/            # ETL prototype notebook
+├── script/              # Entry-point scripts
+│   ├── setup.py         # Create MLflow run and log config
+│   ├── process.py       # Fetch and preprocess data
+│   ├── train.py         # Train model
+│   ├── validate.py      # Evaluate and log results
+│   └── utils/           # Shared helpers (data loading, metrics)
+├── Dockerfile
+├── singularity.def
+└── run_local.sh         # Run full pipeline locally
+```
 
 ## Prerequisites
-- Python 3.10.13
-- Git
-- data/raw (must be created manually) at the root of the project.
+- Python 3.10+
+- `kmc` package installed (`pip install -e .` from repo root)
+- `.env` file with MLflow and S3 credentials (see below)
 
 ## Getting Started
-1. Clone the repository:
-    ```bash 
-    git clone https://github.com/Tanbjs/xplorer_mini_sysid.git 
+
+1. Clone the repo and install the package:
+    ```bash
+    git clone <repo-url>
+    cd kmc
+    pip install -e .
     ```
 
-2. Navigate to the project directory:
-    ```bash 
-    cd xplorer_mini_sysid
+2. Create a `.env` file inside `sysid/`:
+    ```
+    MLFLOW_TRACKING_URI=...
+    S3_ENDPOINT_URL=...
+    S3_ACCESS_KEY_ID=...
+    S3_SECRET_ACCESS_KEY=...
     ```
 
-3. Create directory (Make sure to place your raw data files in this directory):
+3. Run the full pipeline from `sysid/`:
     ```bash
-    mkdir data/raw
+    cd sysid
+    bash run_local.sh
     ```
 
-3. Install the required packages (Optional: activate a virtual environment then run the following commands):
-    ```bash
-    pip install -r requirements/base.txt
-    pip install -r requirements/dev.txt
-    ```
+## Docker
 
-4. Run the local experiment
-    - Linux or macOS
-    ```bash
-   source tools/run/run_local.sh
-    ```
-    - Docker
-    ```bash
-   docker build -t <image_name> .
-   docker run --gpus all -it --rm -v $(pwd):/workspace <image_name>
-   source tools/run/run_local.sh
-    ```
+Build and run with GPU support:
+```bash
+cd kmc
+docker build -f sysid/Dockerfile -t kmc-sysid .
+docker run --gpus all -it --rm -v $(pwd)/sysid:/workspace kmc-sysid
+bash run_local.sh
+```
