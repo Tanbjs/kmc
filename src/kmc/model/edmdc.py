@@ -2,7 +2,9 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 from sklearn.linear_model import Ridge, LinearRegression, Lasso
+
 from ..base import BaseObservable
+
 
 class EDMDc(BaseEstimator):
     """
@@ -77,7 +79,12 @@ class EDMDc(BaseEstimator):
         Predict the next PHYSICAL state x_{k+1}.
         """
         self._check_fitted()
-        Z = self._obs_func.fit_transform(X)
+
+        # 1. Lift
+        Z = self._obs_func.transform(X)
+        
+        # 2. Evolve in Latent Space
+        # z_{k+1} = A * z_k + B * u_k
         Z_next = Z @ self.A.T + U @ self.B.T
 
         return Z_next
