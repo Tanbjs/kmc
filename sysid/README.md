@@ -30,41 +30,56 @@ sysid/
 
 ```mermaid
 flowchart LR
-    subgraph local["Local / Container"]
+    subgraph local["🖥️  Local / Container"]
         direction TB
-        kmc["kmc library\nDMDc · EDMDc · LitKAEc"]
-        subgraph pipeline["sysid pipeline"]
+        kmc("⚙️ kmc library\nDMDc · EDMDc · LitKAEc")
+
+        subgraph pipeline["  sysid pipeline  "]
             direction TB
-            A["setup.py\ncreate MLflow run\nlog config"]
-            B["process.py\nfetch raw data\npreprocess\nupload"]
-            C["train.py\nload data\ntrain model\nlog model"]
-            D["validate.py\nload model\npredict\nlog results"]
+            A("📋 setup.py\ncreate MLflow run · log config")
+            B("🔄 process.py\nfetch · preprocess · upload")
+            C("🏋️ train.py\ntrain model · log model")
+            D("📊 validate.py\npredict · log results")
             A --> B --> C --> D
         end
+
         kmc --> pipeline
     end
 
-    subgraph mlflow["MLflow Tracking Server"]
-        runs["Runs / Experiments\nparams · metrics"]
-        registry["Model Registry"]
-        art["Artifacts\nconfig · plots · scores"]
+    subgraph mlflow["📈  MLflow Tracking Server"]
+        direction TB
+        runs("Runs / Experiments\nparams · metrics")
+        registry("Model Registry")
+        art("Artifacts\nplots · scores")
     end
 
-    subgraph s3["MinIO / S3"]
-        raw["raw/\nAUV CSV files"]
-        clean["cleaned/\ntrain · val · test"]
+    subgraph s3["🪣  MinIO / S3"]
+        direction TB
+        raw("raw/\nAUV CSV files")
+        clean("cleaned/\ntrain · val · test")
     end
 
-    A -->|"log config + run_id"| runs
-    B -->|"read"| raw
-    B -->|"upload"| clean
-    B -->|"log dataset lineage"| runs
-    C -->|"read"| clean
-    C -->|"log params/metrics"| runs
-    C -->|"register model"| registry
-    D -->|"load model"| registry
-    D -->|"read test data"| clean
-    D -->|"log figures/scores"| art
+    A -- "log config + run_id" --> runs
+    B -- "read" --> raw
+    B -- "upload" --> clean
+    B -- "log dataset lineage" --> runs
+    C -- "read" --> clean
+    C -- "log params/metrics" --> runs
+    C -- "register model" --> registry
+    D -- "load model" --> registry
+    D -- "read test data" --> clean
+    D -- "log figures/scores" --> art
+
+    style kmc fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    style A fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    style B fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    style C fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    style D fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    style runs fill:#fef9c3,stroke:#ca8a04,color:#451a03
+    style registry fill:#fef9c3,stroke:#ca8a04,color:#451a03
+    style art fill:#fef9c3,stroke:#ca8a04,color:#451a03
+    style raw fill:#dcfce7,stroke:#16a34a,color:#052e16
+    style clean fill:#dcfce7,stroke:#16a34a,color:#052e16
 ```
 
 ## Prerequisites
