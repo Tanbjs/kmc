@@ -1,0 +1,2 @@
+Bootstrap: docker-daemon
+From: torch-cu12.9:latest

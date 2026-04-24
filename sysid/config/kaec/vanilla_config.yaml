@@ -1,0 +1,153 @@
+# -------------------------
+# Model Architecture
+# -------------------------
+experiment_name: "xplorer mini"
+method : "deep vanilla"
+
+# Data loader parameters
+bucket_name: "xplorer-mini-data"
+prefix: "smoothed"
+cleaner: 
+  method: "hampel"
+  kwargs:
+    window: 20
+    sigma: 20
+
+# Smoothing parameters
+# Available methods: 'ma' (moving average), 'butter' (Butterworth filter)
+# -'butter', kwargs should include 'order' and 'fc' (Hz).
+# -'ma', kwargs should include 'window' (window size).
+
+smoother:
+  method: "butter"
+  kwargs:
+    order: 4
+    fc: 0.1
+
+# smoother:
+#   method: "ma"
+#   kwargs:
+#     window: 5
+
+ratio: [0.7, 0.15, 0.15]
+
+# Feature selection for state, input, and output variables for model.
+feature_selection:
+  state:
+    # - ['odom', 'position', 'z']
+    # - ['odom', 'roll']
+    # - ['odom', 'pitch']
+    - ['odom', 'twist']
+  input:
+    - ['est_tau']
+  output:
+    - ['odom', 'twist']
+
+# Normalization method: 'minmax', 'standard', or 'none'
+scaler_method: 'standard'
+# scaler_args:
+#     feature_range: [-1,1]
+#   standard:
+#     with_mean: true
+#     with_std: true
+# Hidden layers for the encoder network.
+# Format: {layer_name: [units, activation_function]}
+# The final layer defines the dimension of the non-linear observable function g(x).
+# Encoder network architecture (maps from n_state to a hidden dimension)
+encoder_hidden: 
+    'hidden layer1':
+        'units': 64
+        'activation': 'selu'
+        'weight_init': 'xavier_uniform'
+        'bias_init': true
+    'hidden layer2':
+        'units': 32
+        'activation': 'tanh'
+        'weight_init': 'xavier_uniform'
+        'bias_init': true
+    # 'hidden layer3':
+    #     'units': 128
+    #     'activation': 'elu'
+    #     'weight_init': 'kaiming_uniform'
+    #     'bias_init': true
+
+latent_dim: 32
+
+# Decoder network architecture (maps from latent_dim back to n_state)
+## decoder_mode: 'linear' for linear decoder (x = Cz where C = [I 0] is not trainable which means ignoring decoder_hidden)
+## decoder_mode: 'nonlinear' for nonlinear decoder (x = Dec(z) where Dec is a trainable neural network with architecture defined in decoder_hidden)
+
+decoder_mode: 'nonlinear'
+decoder_hidden:
+    'hidden layer1':
+        'units': 64
+        'activation': 'tanh'
+        'weight_init': 'xavier_uniform'
+        'bias_init': true
+    'hidden layer2':
+        'units': 64
+        'activation': 'tanh'
+        'weight_init': 'xavier_uniform'
+        'bias_init': true
+    # 'hidden layer3':
+    #     'units': 128
+    #     'activation': 'elu'
+    #     'weight_init': 'kaiming_uniform'
+    #     'bias_init': true
+
+# -------------------------
+# Training Hyperparameters
+# -------------------------
+
+# prediction step
+prediction_step: 10
+
+# Training parameters
+max_epochs: 1000                    # maximum training epochs
+batch_size: 256                     # batch size for training
+
+optimizer1: 
+    type: 'adam'
+    params: 
+      lr: 0.0005
+# optimizer2: 
+#     type: 'lbfgs'
+#     params: 
+#         lr: 0.01
+#         max_iter: 20
+#         history_size: 100
+#         line_search_fn: 'strong_wolfe'
+
+# Scheduler parameters
+# scheduler:
+#     type: 'ReduceLROnPlateau'
+#     params:
+#         mode: 'min'
+#         factor: 0.75
+#         patience: 50
+#         threshold: 0.0001
+#         threshold_mode: 'rel'
+#         cooldown: 0
+#         min_lr: 0.000001
+
+scheduler:
+    type: 'CosineAnnealingWarmRestarts'  # Better than ReduceLROnPlateau
+    params:
+        T_0: 20
+        T_mult: 2
+        eta_min: 0.000001
+
+# Loss function weights 
+# Weights in order: [L_ox, L_xx, L_xo, L_inf, reg_enc, reg_dec]
+# w_rec: Reconstruction loss
+# L_xx: Prediction loss
+# L_xo: Latent space dynamics loss
+# L_inf: Infinity-norm penalty loss
+# reg_*: Regularization loss for encoder/decoder
+loss_weights:
+  w_rec: 1.0
+  w_pred: 1.5 
+  w_lin: 1.2
+  w_inf: 0.0001
+  w_enc_reg: 0.005
+  w_dec_reg: 0.001

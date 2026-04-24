@@ -1,0 +1,60 @@
+# -------------------------
+# Model Architecture
+# -------------------------
+experiment_name: "xplorer mini"
+method : "dmdc"
+
+# Data loader parameters
+bucket_name: "xplorer-mini-data"
+prefix: "cleaned/"
+cleaner: 
+  method: "hampel"
+  kwargs:
+    window: 20
+    sigma: 20
+
+# Smoothing parameters
+# Available methods: 'ma' (moving average), 'butter' (Butterworth filter)
+# -'butter', kwargs should include 'order' and 'fc' (Hz).
+# -'ma', kwargs should include 'window' (window size).
+
+# smoother:
+#   method: "butter"
+#   kwargs:
+#     order: 4
+#     fc: 0.1
+
+# smoother:
+#   method: "ma"
+#   kwargs:
+#     window: 5
+
+ratio: [0.85, 0.15]
+
+# Normalization method: 'minmax', 'standard', or 'none'
+scaler_method: 'standard'
+scaler_args:
+#     feature_range: [-1, 1]
+    with_mean: true
+    with_std: true
+
+# Feature selection for state, input, and output variables for model.
+feature_selection:
+  state:
+    # - ['odom', 'position']
+    # - ['odom', 'roll']
+    # - ['odom', 'pitch']
+    # - ['odom', 'yaw']
+    - ['odom', 'twist']
+  input:
+    - ['est_tau']
+  output:
+    # - ['odom', 'position']
+    # - ['odom', 'roll']
+    # - ['odom', 'pitch']
+    # - ['odom', 'yaw']
+    - ['odom', 'twist']
+
+# DMDc parameters
+use_ridge: true
+ridge_alpha: 0.01
