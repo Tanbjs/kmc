@@ -1,0 +1,25 @@
+# Version control
+.git/
+
+# Python artifacts
+**/__pycache__/
+**/*.pyc
+**/*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Secrets
+.env
+.env.*
+
+# IDE
+.vscode/
+
+# Mounted as volume at runtime — not baked into image
+sysid/script/
+sysid/config/
+sysid/notebook/
+sysid/container/
+sysid/run_local.sh
+sysid/README.md
