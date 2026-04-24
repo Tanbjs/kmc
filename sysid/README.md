@@ -46,17 +46,20 @@ flowchart LR
         kmc --> pipeline
     end
 
-    subgraph mlflow["📈  MLflow Tracking Server"]
+    subgraph nas["🗄️  AMARR — Synology NAS"]
         direction TB
-        runs("Runs / Experiments\nparams · metrics")
-        registry("Model Registry")
-        art("Artifacts\nplots · scores")
-    end
+        subgraph mlflow["📈  MLflow Tracking Server"]
+            direction TB
+            runs("Runs / Experiments\nparams · metrics")
+            registry("Model Registry")
+            art("Artifacts\nplots · scores")
+        end
 
-    subgraph s3["🪣  MinIO / S3"]
-        direction TB
-        raw("raw/\nAUV CSV files")
-        clean("cleaned/\ntrain · val · test")
+        subgraph s3["🪣  MinIO / S3"]
+            direction TB
+            raw("raw/\nAUV CSV files")
+            clean("cleaned/\ntrain · val · test")
+        end
     end
 
     A -- "log config + run_id" --> runs
