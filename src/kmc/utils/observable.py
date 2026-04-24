@@ -1,9 +1,12 @@
+from typing import Union, TypeAlias
+
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.preprocessing import PolynomialFeatures
 
 from ..base import BaseObservable
+
 
 class IdentityObservable(BaseObservable):
     def __init__(self):
@@ -23,6 +26,7 @@ class IdentityObservable(BaseObservable):
             
         return [f"x{i}" for i in range(self.n_features_in_)]
     
+
 class PolynomialObservable(BaseObservable):
     def __init__(self, degree: int = 2, interaction_only: bool = False, include_bias: bool = False):
         super().__init__()
@@ -60,6 +64,7 @@ class PolynomialObservable(BaseObservable):
         
         return self.poly_transformer_.get_feature_names_out(input_names).tolist()
 
+
 class RBFObservable(BaseObservable):
     def __init__(self, n_centers: int = 10, gamma: float = 1.0, random_state: int = 42):
         super().__init__()
@@ -81,6 +86,7 @@ class RBFObservable(BaseObservable):
 
     def get_output_names(self) -> list[str]:
         return [f"rbf_{i}" for i in range(self.n_centers)]
+
 
 class TrigonometricObservable(BaseObservable):
     def __init__(self, frequencies: list[float] = [1.0]):
@@ -108,6 +114,7 @@ class TrigonometricObservable(BaseObservable):
                 names.append(f"cos({freq}x{i})")
         return names
     
+
 class CombinedObservable(BaseObservable):
     def __init__(self, observables: list[BaseObservable]):
         super().__init__()
