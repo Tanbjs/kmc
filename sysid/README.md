@@ -5,7 +5,7 @@ Training and validation pipeline for data-driven system identification of an aut
 ## Models
 - DMDc — Dynamic Mode Decomposition with control
 - EDMDc — Extended Dynamic Mode Decomposition with control
-- Deep Koopman with control (DKC / DKC-PINN)
+- Deep Koopman with control
 
 ## Structure
 ```
