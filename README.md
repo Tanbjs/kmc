@@ -1,4 +1,4 @@
-# kmc — Koopman Model Control
+# kmc — Koopman with Control
 
 Python library for data-driven control using Koopman operator theory.
 
