@@ -11,8 +11,7 @@ Training and validation pipeline for data-driven system identification of an aut
 ```
 sysid/
 ├── config/              # Experiment configs (model, data, features)
-│   ├── kaec/            # Koopman-based model configs
-│   └── physics/         # Physics-informed configs
+│   └── kaec/            # Koopman-based model configs
 ├── notebook/            # ETL prototype notebook
 ├── container/           # Container definitions
 │   ├── Dockerfile
